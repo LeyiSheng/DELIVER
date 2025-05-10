@@ -4,7 +4,7 @@ SAVE_DIR        : 'output'          # output folder name used for saving the mod
 MODEL:
   NAME          : CMNeXt                                            # name of the model you are using
   BACKBONE      : CMNeXt-B2                                         # model variant
-  PRETRAINED    : 'checkpoints/pretrained/segformer/mit_b2.pth'     # backbone model's weight 
+  PRETRAINED    : 'checkpoints/pretrained/segformer/mit_b5.pth'     # backbone model's weight 
   RESUME        : ''                                                # checkpoint file 
 
 DATASET:
