@@ -34,7 +34,10 @@ def main(cfg, gpu, save_dir):
     loss_cfg, optim_cfg, sched_cfg = cfg['LOSS'], cfg['OPTIMIZER'], cfg['SCHEDULER']
     epochs, lr = train_cfg['EPOCHS'], optim_cfg['LR']
     resume_path = cfg['MODEL']['RESUME']
-    gpus = int(os.environ['WORLD_SIZE'])
+    if train_cfg['DDP']:
+        gpus = int(os.environ['WORLD_SIZE'])
+    else:
+        gpus = 1
 
     traintransform = get_train_augmentation(train_cfg['IMAGE_SIZE'], seg_fill=dataset_cfg['IGNORE_LABEL'])
     valtransform = get_val_augmentation(eval_cfg['IMAGE_SIZE'])
@@ -173,7 +176,10 @@ if __name__ == '__main__':
 
     fix_seeds(3407)
     setup_cudnn()
-    gpu = setup_ddp()
+    if cfg['TRAIN']['DDP']:
+        gpu = setup_ddp()
+    else:
+        gpu = 0
     modals = ''.join([m[0] for m in cfg['DATASET']['MODALS']])
     model = cfg['MODEL']['BACKBONE']
     exp_name = '_'.join([cfg['DATASET']['NAME'], model, modals])
@@ -183,4 +189,6 @@ if __name__ == '__main__':
     os.makedirs(save_dir, exist_ok=True)
     logger = get_logger(save_dir / 'train.log')
     main(cfg, gpu, save_dir)
-    cleanup_ddp()
+    print(1)
+    if cfg['TRAIN']['DDP']:
+        cleanup_ddp()

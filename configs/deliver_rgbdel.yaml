@@ -3,7 +3,7 @@ SAVE_DIR        : 'output'          # output folder name used for saving the mod
 
 MODEL:
   NAME          : CMNeXt                                            # name of the model you are using
-  BACKBONE      : CMNeXt-B2                                         # model variant
+  BACKBONE      : CMNeXt-B5                                         # model variant
   PRETRAINED    : 'checkpoints/pretrained/segformer/mit_b5.pth'     # backbone model's weight 
   RESUME        : ''                                                # checkpoint file 
 
@@ -26,7 +26,7 @@ TRAIN:
   EVAL_START    : 100             # evaluation interval start
   EVAL_INTERVAL : 1               # evaluation interval during training
   AMP           : false           # use AMP in training
-  DDP           : true            # use DDP training
+  DDP           : false            # use DDP training
 
 LOSS:
   NAME          : OhemCrossEntropy          # loss function name 
@@ -51,7 +51,7 @@ EVAL:
   # MODEL_PATH    : 'output/DELIVER/cmnext_b2_deliver_rgbl.pth'
   # MODEL_PATH    : 'output/DELIVER/cmnext_b2_deliver_rgbde.pth'
   # MODEL_PATH    : 'output/DELIVER/cmnext_b2_deliver_rgbdl.pth'
-  MODEL_PATH    : 'output/DELIVER/cmnext_b2_deliver_rgbdel.pth'
+  MODEL_PATH    : 'output/DELIVER/cmnext_b5_deliver_rgbdel.pth'
   IMAGE_SIZE    : [1024, 1024]                            # evaluation image size in (h, w)        
   BATCH_SIZE    : 4                                       # batch size used to train               
   MSF: 
@@ -61,7 +61,7 @@ EVAL:
 
 
 TEST:
-  MODEL_PATH    : 'output/DELIVER/cmnext_b2_deliver_rgbdel.pth'    # trained model file path
+  MODEL_PATH    : 'output/DELIVER/cmnext_b5_deliver_rgbdel.pth'    # trained model file path
   FILE          : 'data/DELIVER'                          # filename or foldername 
   IMAGE_SIZE    : [1024, 1024]                            # inference image size in (h, w)
   OVERLAY       : false                                   # save the overlay result (image_alpha+label_alpha)
