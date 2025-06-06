@@ -92,7 +92,7 @@ def evaluate_noisy_modality(model, dataloader, device):
     metrics = Metrics(n_classes, dataloader.dataset.ignore_label, device)
     sliding = False
     for images, labels in tqdm(dataloader):
-        level = 0 # 0,1,2
+        level = 2 # 0,1,2
         density= [0.05,0.1,0.2]
         std = [0.1,0.2,0.5]
         #print(density[level], std[level])

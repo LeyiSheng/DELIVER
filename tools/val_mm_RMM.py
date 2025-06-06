@@ -96,7 +96,7 @@ def evaluate_with_random_missing_modalities(model, dataloader, device):
     # Define the modal order and the total number of modalities
     modalities = ['RGB', 'D', 'E', 'L']
     n_modalities = len(modalities)
-    r = 0.25
+    r = 0.75#////////////////////////////////////////////////////////////////////////////////////////////////////////
     # Store results for each modality combination
     results = {}
 

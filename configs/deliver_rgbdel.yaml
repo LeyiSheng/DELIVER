@@ -51,7 +51,7 @@ EVAL:
   # MODEL_PATH    : 'output/DELIVER/cmnext_b2_deliver_rgbl.pth'
   # MODEL_PATH    : 'output/DELIVER/cmnext_b2_deliver_rgbde.pth'
   # MODEL_PATH    : 'output/DELIVER/cmnext_b2_deliver_rgbdl.pth'
-  MODEL_PATH    : 'output/DELIVER/cmnext_b5_deliver_rgbdel.pth'
+  MODEL_PATH    : '/hpc2hdd/home/yhuang489/lsheng847/DELIVER/output/DELIVER_CMNeXt-B5_idel/CMNeXt_CMNeXt-B5_DELIVER_epoch140_66.76.pth'
   IMAGE_SIZE    : [1024, 1024]                            # evaluation image size in (h, w)        
   BATCH_SIZE    : 4                                       # batch size used to train               
   MSF: 
