@@ -2,9 +2,9 @@ DEVICE          : cuda              # device used for training and evaluation (c
 SAVE_DIR        : 'output'          # output folder name used for saving the model, logs and inference results
 
 MODEL:
-  NAME          : CMNeXt                                            # name of the model you are using
+  NAME          : CMNeXt                                           # name of the model you are using
   BACKBONE      : CMNeXt-B5                                         # model variant
-  PRETRAINED    : 'checkpoints/pretrained/segformer/mit_b5.pth'     # backbone model's weight 
+  PRETRAINED    : '/hpc2hdd/home/lsheng847/1122321/DELIVER/mit_b2.pth'     # backbone model's weight 
   RESUME        : ''                                                # checkpoint file 
 
 DATASET:
@@ -51,17 +51,17 @@ EVAL:
   # MODEL_PATH    : 'output/DELIVER/cmnext_b2_deliver_rgbl.pth'
   # MODEL_PATH    : 'output/DELIVER/cmnext_b2_deliver_rgbde.pth'
   # MODEL_PATH    : 'output/DELIVER/cmnext_b2_deliver_rgbdl.pth'
-  MODEL_PATH    : '/hpc2hdd/home/yhuang489/lsheng847/DELIVER/output/DELIVER_CMNeXt-B5_idel/CMNeXt_CMNeXt-B5_DELIVER_epoch140_66.76.pth'
+  MODEL_PATH    : '/hpc2hdd/home/lsheng847/1122321/DELIVER/cmnext_b2_deliver_rgbdel.pth'
   IMAGE_SIZE    : [1024, 1024]                            # evaluation image size in (h, w)        
   BATCH_SIZE    : 4                                       # batch size used to train               
   MSF: 
     ENABLE      : false                                   # multi-scale and flip evaluation  
     FLIP        : true                                    # use flip in evaluation  
     SCALES      : [0.5, 0.75, 1.0, 1.25, 1.5, 1.75]       # scales used in MSF evaluation                
-
+  # When evaluating a CAFuser model with val_mm_EMM.py, set:
 
 TEST:
-  MODEL_PATH    : 'output/DELIVER/cmnext_b5_deliver_rgbdel.pth'    # trained model file path
+  MODEL_PATH    : '/hpc2hdd/home/lsheng847/1122321/DELIVER/cmnext_b2_deliver_rgbdel.pth'    # trained model file path
   FILE          : 'data/DELIVER'                          # filename or foldername 
   IMAGE_SIZE    : [1024, 1024]                            # inference image size in (h, w)
   OVERLAY       : false                                   # save the overlay result (image_alpha+label_alpha)

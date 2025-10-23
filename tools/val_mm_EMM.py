@@ -22,6 +22,109 @@ from torch import distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from semseg.utils.utils import fix_seeds, setup_cudnn, cleanup_ddp, setup_ddp, get_logger, cal_flops, print_iou
 
+# Optional imports for CAFuser integration (Detectron2/OneFormer-based)
+_CAFUSER_AVAILABLE = False
+try:
+    import sys
+    from pathlib import Path as _Path
+    # Try to add CAFuser to the path if sibling repo exists
+    _this_file = _Path(__file__).resolve()
+    _cafuser_root = (_this_file.parents[2] / 'CAFuser')
+    if _cafuser_root.exists():
+        sys.path.insert(0, str(_cafuser_root))
+    # Detectron2 / OneFormer imports (registered by CAFuser)
+    from detectron2.config import get_cfg as d2_get_cfg
+    from detectron2.checkpoint import DetectionCheckpointer
+    from detectron2.modeling import build_model as d2_build_model
+    # CAFuser/OneFormer config adders
+    from oneformer import add_oneformer_config, add_common_config, add_swin_config, add_dinat_config, add_convnext_config
+    from cafuser.config import add_cafuser_config, add_deliver_config
+    _CAFUSER_AVAILABLE = True
+except Exception:
+    # We will only error if user actually selects MODEL.NAME == 'CAFUSER'
+    _CAFUSER_AVAILABLE = False
+
+class CAFUSERWrapper(torch.nn.Module):
+    """Minimal wrapper to run CAFuser inside DELIVER eval loop.
+
+    Expects list of modality tensors [B, C, H, W] in the order given by
+    cfg['DATASET']['MODALS'] (e.g., ['img','depth','event','lidar']).
+    Produces tensor [B, num_classes, H, W] of per-class probabilities.
+    """
+    MODALITY_MAP = {
+        'img': 'CAMERA',
+        'image': 'CAMERA',
+        'rgb': 'CAMERA',
+        'depth': 'DEPTH',
+        'event': 'EVENT',
+        'lidar': 'LIDAR',
+    }
+
+    def __init__(self, caf_cfg, d2_model, deliver_modals: list):
+        super().__init__()
+        self.caf_cfg = caf_cfg
+        self.model = d2_model
+        self.deliver_modals = deliver_modals
+        # CAFuser modality order and main modality from its config
+        try:
+            self.caf_mod_order = [m.upper() for m in caf_cfg.DATASETS.DELIVER.MODALITIES.ORDER]
+        except Exception:
+            # Fallback to default
+            self.caf_mod_order = ['CAMERA', 'LIDAR', 'EVENT', 'DEPTH']
+        try:
+            self.main_mod = caf_cfg.DATASETS.DELIVER.MAIN_MODALITY.upper()
+        except Exception:
+            self.main_mod = 'CAMERA'
+
+        # Build reverse index from CAFuser modality name -> index in deliver input list
+        lower_deliver = [m.lower() for m in deliver_modals]
+        self.caf_to_idx = {}
+        for caf_mod in self.caf_mod_order:
+            # map CAF modality to expected lower name in deliver list
+            # e.g., CAMERA -> img, DEPTH -> depth, EVENT -> event, LIDAR -> lidar
+            target_lower = None
+            for k, v in CAFUSERWrapper.MODALITY_MAP.items():
+                if v == caf_mod:
+                    target_lower = k
+                    break
+            if target_lower is None:
+                raise ValueError(f"Unknown CAFuser modality mapping for {caf_mod}")
+            if target_lower not in lower_deliver:
+                raise ValueError(f"Input modalities {deliver_modals} missing required CAFuser modality {caf_mod}")
+            self.caf_to_idx[caf_mod] = lower_deliver.index(target_lower)
+
+    @torch.no_grad()
+    def forward(self, images_list: list):
+        # images_list: list of modality tensors, each [B,C,H,W]
+        B = images_list[0].shape[0]
+        H, W = images_list[0].shape[2], images_list[0].shape[3]
+
+        batched_inputs = []
+        for b in range(B):
+            record = {
+                'modalities': self.caf_mod_order,
+                'height': H,
+                'width': W,
+                'task': 'The task is semantic',
+            }
+            # Assign per-modality tensors
+            for caf_mod in self.caf_mod_order:
+                idx = self.caf_to_idx[caf_mod]
+                tensor_bc = images_list[idx][b]  # [C,H,W]
+                record[caf_mod] = tensor_bc
+                if caf_mod == self.main_mod:
+                    record['image'] = tensor_bc
+            batched_inputs.append(record)
+
+        outputs = self.model(batched_inputs)
+        # outputs is a list of dicts, each with key 'sem_seg': [num_classes, H, W]
+        out = []
+        for o in outputs:
+            if 'sem_seg' not in o:
+                raise RuntimeError('CAFuser model did not return semantic output')
+            out.append(o['sem_seg'])
+        return torch.stack(out, dim=0)
+
 def pad_image(img, target_size):
     rows_to_pad = max(target_size[0] - img.shape[2], 0)
     cols_to_pad = max(target_size[1] - img.shape[3], 0)
@@ -210,10 +313,42 @@ def main(cfg):
         # --- test set
         # dataset = eval(cfg['DATASET']['NAME'])(cfg['DATASET']['ROOT'], 'test', transform, cfg['DATASET']['MODALS'], case)
 
-        model = eval(cfg['MODEL']['NAME'])(cfg['MODEL']['BACKBONE'], dataset.n_classes, cfg['DATASET']['MODALS'])
-        msg = model.load_state_dict(torch.load(str(model_path), map_location='cpu'),strict = False)
-        print(msg)
-        model = model.to(device)
+        # Build model
+        if cfg['MODEL']['NAME'].lower() == 'cafuser':
+            if not _CAFUSER_AVAILABLE:
+                raise ImportError('CAFUSER evaluation requires Detectron2 + OneFormer + CAFuser to be installed and discoverable on PYTHONPATH.')
+            caf_cfg_path = eval_cfg.get('CAFUSER_CFG', None)
+            if not caf_cfg_path:
+                raise ValueError("EVAL.CAFUSER_CFG is required when MODEL.NAME == 'CAFUSER'")
+            # Build Detectron2 cfg
+            caf_cfg = d2_get_cfg()
+            add_common_config(caf_cfg)
+            add_oneformer_config(caf_cfg)
+            add_swin_config(caf_cfg)
+            add_dinat_config(caf_cfg)
+            add_convnext_config(caf_cfg)
+            add_cafuser_config(caf_cfg)
+            add_deliver_config(caf_cfg)
+            caf_cfg.merge_from_file(caf_cfg_path)
+            # Ensure semantic inference is enabled
+            try:
+                caf_cfg.MODEL.TEST.SEMANTIC_ON = True
+                caf_cfg.MODEL.TEST.INSTANCE_ON = False
+                caf_cfg.MODEL.TEST.PANOPTIC_ON = False
+            except Exception:
+                pass
+            # Build and load weights
+            d2_model = d2_build_model(caf_cfg)
+            DetectionCheckpointer(d2_model).load(str(model_path))
+            d2_model.eval()
+            d2_model.to(device)
+            # Wrap to align interfaces
+            model = CAFUSERWrapper(caf_cfg, d2_model, cfg['DATASET']['MODALS']).to(device)
+        else:
+            model = eval(cfg['MODEL']['NAME'])(cfg['MODEL']['BACKBONE'], dataset.n_classes, cfg['DATASET']['MODALS'])
+            msg = model.load_state_dict(torch.load(str(model_path), map_location='cpu'),strict = False)
+            print(msg)
+            model = model.to(device)
         sampler_val = None
         dataloader = DataLoader(dataset, batch_size=eval_cfg['BATCH_SIZE'], num_workers=eval_cfg['BATCH_SIZE'], pin_memory=False, sampler=sampler_val)
         '''if True:

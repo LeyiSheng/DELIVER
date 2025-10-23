@@ -145,7 +145,6 @@ dependencies:
     - pure-eval==0.2.2
     - pyasn1==0.4.8
     - pyasn1-modules==0.2.8
-    - pycocotools==2.0.4
     - pygments==2.11.2
     - pyparsing==3.0.6
     - pyquaternion==0.9.9
