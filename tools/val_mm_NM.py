@@ -20,6 +20,7 @@ from torch.utils.data import DistributedSampler, RandomSampler
 from torch import distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from semseg.utils.utils import fix_seeds, setup_cudnn, cleanup_ddp, setup_ddp, get_logger, cal_flops, print_iou
+from PIL import Image
 
 def pad_image(img, target_size):
     rows_to_pad = max(target_size[0] - img.shape[2], 0)
@@ -82,6 +83,79 @@ def add_gaussian_noise(tensor, mean=0.0, std=0.0):
     noise = torch.randn(tensor.size()) * std + mean
     noisy_tensor = tensor + noise.to(torch.device(cfg['DEVICE']))
     return noisy_tensor
+
+
+def _denorm_rgb(img: torch.Tensor) -> torch.Tensor:
+    """Denormalize an RGB tensor normalized with ImageNet mean/std back to [0,255] uint8.
+
+    Args:
+        img: Tensor [3,H,W] on any device, normalized with mean (0.485,0.456,0.406) and std (0.229,0.224,0.225)
+    Returns:
+        Tensor [3,H,W] uint8 on CPU
+    """
+    mean = torch.tensor([0.485, 0.456, 0.406], device=img.device).view(3, 1, 1)
+    std = torch.tensor([0.229, 0.224, 0.225], device=img.device).view(3, 1, 1)
+    img = img * std + mean
+    img = (img * 255.0).clamp(0, 255).to(torch.uint8).cpu()
+    return img
+
+
+def _colorize_mask(mask: torch.Tensor, palette: torch.Tensor) -> torch.Tensor:
+    """Colorize a segmentation mask using a palette.
+
+    Args:
+        mask: Tensor [H,W] long
+        palette: Tensor [K,3] uint8 or int
+    Returns:
+        Tensor [H,W,3] uint8 on CPU
+    """
+    if mask.device.type != 'cpu':
+        mask = mask.cpu()
+    # ensure type
+    mask = mask.long()
+    colors = palette[mask].to(torch.uint8)  # [H,W,3]
+    return colors.cpu()
+
+
+@torch.no_grad()
+def save_sample_visualization(model, dataloader, device, dataset, save_path: str):
+    """Save a visualization image (RGB | Pred | Overlay) for one sample from dataloader.
+
+    The saved image concatenates original RGB, colorized prediction, and overlay.
+    """
+    model.eval()
+    try:
+        batch = next(iter(dataloader))
+    except StopIteration:
+        return
+
+    images, labels = batch
+    images = [x.to(device) for x in images]
+
+    # Forward pass
+    preds = model(images)
+    if isinstance(preds, (list, tuple)):
+        preds = preds[-1]
+    pred_mask = preds.argmax(dim=1)[0].detach()  # [H,W]
+
+    # Find RGB modality index if available
+    try:
+        rgb_idx = dataloader.dataset.modals.index('img')
+    except Exception:
+        rgb_idx = 0
+
+    rgb = images[rgb_idx][0].detach()  # [3,H,W]
+    rgb_denorm = _denorm_rgb(rgb)
+
+    color_mask = _colorize_mask(pred_mask, dataset.PALETTE)  # [H,W,3]
+
+    # Build overlay
+    rgb_np = rgb_denorm.permute(1, 2, 0).numpy()
+    cm_np = color_mask.numpy()
+    overlay_np = (0.6 * rgb_np.astype(np.float32) + 0.4 * cm_np.astype(np.float32)).clip(0, 255).astype(np.uint8)
+
+    concat = np.concatenate([rgb_np, cm_np, overlay_np], axis=1)
+    Image.fromarray(concat).save(save_path)
 
 
 @torch.no_grad()
@@ -216,6 +290,14 @@ def main(cfg):
             f.write("\n============== Eval on {} {} images =================\n".format(case, len(dataset)))
             f.write("\n")
             print(tabulate(table, headers='keys'), file=f)
+
+        # Save one visualization image from the current dataloader
+        vis_path = os.path.join(os.path.dirname(eval_cfg['MODEL_PATH']), f'vis_{case or "all"}_{exp_time}.png')
+        try:
+            save_sample_visualization(model, dataloader, device, dataset, vis_path)
+            print(f"Saved visualization to {vis_path}")
+        except Exception as e:
+            print(f"Visualization failed: {e}")
 
 
 

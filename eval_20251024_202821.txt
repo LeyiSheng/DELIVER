@@ -1,0 +1,31 @@
+/hpc2hdd/home/lsheng847/1122321/DELIVER/cmnext_b2_deliver_rgbdel.pth
+============== Eval on None 2005 images =================
+
+Class           IoU     F1    Acc
+------------  -----  -----  -----
+Building      46.72  63.68  48.59
+Fence         10.25  18.59  53.53
+Other          0      0      0
+Pedestrian    19.23  32.26  42.63
+Pole          41.77  58.93  54.23
+RoadLine      41.21  58.36  42.49
+Road          84.36  91.52  86.97
+SideWalk      47.57  64.47  76.86
+Vegetation    24.45  39.29  93.44
+Cars          47.98  64.84  69.15
+Wall           4.6    8.79   4.86
+TrafficSign   22.39  36.58  25.36
+Sky           84.79  91.77  85.03
+Ground         0.2    0.4    0.44
+Bridge         1.25   2.48   1.27
+RailTrack     13.61  23.96  13.74
+GroundRail     8.61  15.86   8.78
+TrafficLight  49.76  66.46  61.41
+Static        12.51  22.23  13.46
+Dynamic        2.88   5.59   3.45
+Water         38.5   55.6   78.37
+Terrain       38.83  55.94  43.48
+TwoWheeler    19.35  32.42  36.68
+Bus           53.71  69.88  56.67
+Truck         71.31  83.25  78.92
+Mean          31.43  42.53  43.19
